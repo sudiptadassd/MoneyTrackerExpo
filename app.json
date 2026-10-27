@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "ExTrack",
+    "slug": "extrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#09090b"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.extrack.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#09090b"
+      },
+      "package": "com.extrack.app",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
+    },
+    "plugins": [
+      "expo-document-picker",
+      "expo-file-system"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9b22ebbd-4a53-494c-8823-4bd1ccc97f35"
+      }
+    },
+    "owner": "c2_bebit69965"
+  }
+}
