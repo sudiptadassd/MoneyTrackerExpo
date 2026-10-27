@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Switch,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,12 +45,200 @@ const CAPITAL_COLORS = {
   orange: '#f97316',
 };
 
-const DEFAULT_CURRENCY_TYPES = [
-  { id: 'bigNotes', label: 'Big Notes (e.g., 100, 200, 500)', checked: false, step: 100, description: '', amount: '' },
-  { id: 'smallNotes', label: 'Small Notes (e.g., 10, 20, 50)', checked: false, step: 10, description: '', amount: '' },
-  { id: 'coins', label: 'Coins (e.g., 1, 2, 5)', checked: false, step: 1, description: '', amount: '' },
-  { id: 'Others', label: 'Others', checked: false, step: 1, description: '', amount: '' },
-];
+/* Common cash denominations for each supported currency (notes + coins) */
+const DENOMINATIONS = {
+  '\u20B9': [1, 2, 5, 10, 20, 50, 100, 200, 500, 2000],
+  '$': [1, 2, 5, 10, 20, 50, 100],
+  '\u20AC': [1, 2, 5, 10, 20, 50, 100, 200, 500],
+  '\u00A3': [1, 2, 5, 10, 20, 50],
+  '\u09F3': [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000],
+};
+
+const DEFAULT_DENOMINATIONS = [1, 2, 5, 10, 20, 50, 100];
+
+const EMPTY_FUND_FORM = { note: null, quantity: '', description: '' };
+
+const getNoteOptions = (currency, currentNote) => {
+  const options = [...(DENOMINATIONS[currency] || DEFAULT_DENOMINATIONS)];
+  const numeric = Number(currentNote);
+
+  // Keep legacy/custom values selectable when editing an old fund.
+  if (Number.isFinite(numeric) && numeric > 0 && !options.includes(numeric)) {
+    options.push(numeric);
+  }
+
+  return options.sort((a, b) => a - b);
+};
+
+const sanitizeDescription = (text) =>
+  text
+    .trim()
+    .replace(/,/g, ';')
+    .replace(/\s+-\s+/g, ' \u2013 ');
+
+/* Inline dropdown for picking a note/coin denomination */
+const NoteSelect = ({ value, onChange, currency, colors }) => {
+  const [open, setOpen] = useState(false);
+  const options = getNoteOptions(currency, value);
+  const hasValue = value !== null && value !== undefined && value !== '';
+
+  return (
+    <View>
+      <TouchableOpacity
+        onPress={() => setOpen((prev) => !prev)}
+        activeOpacity={0.8}
+        style={[
+          styles.select,
+          {
+            backgroundColor: colors.input,
+            borderColor: open ? colors.primary : colors.border,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.selectText,
+            { color: hasValue ? colors.foreground : colors.placeholder },
+          ]}
+        >
+          {hasValue
+            ? `${currency}${Number(value).toLocaleString()}`
+            : 'Select a note'}
+        </Text>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={colors.muted}
+        />
+      </TouchableOpacity>
+
+      {open && (
+        <View
+          style={[
+            styles.optionGrid,
+            { backgroundColor: colors.input, borderColor: colors.border },
+          ]}
+        >
+          {options.map((option) => {
+            const isSelected = Number(option) === Number(value);
+            return (
+              <TouchableOpacity
+                key={String(option)}
+                onPress={() => {
+                  onChange(option);
+                  setOpen(false);
+                }}
+                activeOpacity={0.7}
+                style={[
+                  styles.optionChip,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  isSelected && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optionChipText,
+                    { color: isSelected ? '#ffffff' : colors.foreground },
+                  ]}
+                >
+                  {currency}
+                  {Number(option).toLocaleString()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+};
+
+/* Number input with a quick 1-10 picker; any number can be typed manually */
+const QuantityInput = ({ value, onChange, colors }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View>
+      <View style={styles.quantityRow}>
+        <TextInput
+          style={[
+            styles.quantityInput,
+            { color: colors.foreground, backgroundColor: colors.input },
+          ]}
+          placeholder="0"
+          placeholderTextColor={colors.placeholder}
+          value={value}
+          onChangeText={(text) => onChange(text.replace(/[^0-9]/g, ''))}
+          keyboardType="number-pad"
+          maxLength={6}
+        />
+        <TouchableOpacity
+          onPress={() => setOpen((prev) => !prev)}
+          activeOpacity={0.8}
+          style={[
+            styles.quantityDropdownBtn,
+            {
+              backgroundColor: colors.input,
+              borderColor: open ? colors.primary : colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.quantityDropdownText, { color: colors.muted }]}>
+            1-10
+          </Text>
+          <Ionicons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.muted}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {open && (
+        <View
+          style={[
+            styles.quantityGrid,
+            { backgroundColor: colors.input, borderColor: colors.border },
+          ]}
+        >
+          {Array.from({ length: 10 }, (_, index) => index + 1).map((quantity) => {
+            const isSelected = String(quantity) === String(value);
+            return (
+              <TouchableOpacity
+                key={quantity}
+                onPress={() => {
+                  onChange(String(quantity));
+                  setOpen(false);
+                }}
+                activeOpacity={0.7}
+                style={[
+                  styles.quantityChip,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  isSelected && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quantityChipText,
+                    { color: isSelected ? '#ffffff' : colors.foreground },
+                  ]}
+                >
+                  {quantity}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+};
 
 export default function CapitalDetailsScreen({ route, navigation }) {
   const { id } = route.params;
@@ -76,9 +263,8 @@ export default function CapitalDetailsScreen({ route, navigation }) {
   const [isEditFundModalOpen, setIsEditFundModalOpen] = useState(false);
   const [isDeleteFundModalOpen, setIsDeleteFundModalOpen] = useState(false);
   const [selectedFund, setSelectedFund] = useState(null);
-  const [newCurrencyType, setNewCurrencyType] = useState('');
-  const [currencyTypes, setCurrencyTypes] = useState(DEFAULT_CURRENCY_TYPES);
-  const [editCurrencyTypes, setEditCurrencyTypes] = useState([]);
+  const [fundForm, setFundForm] = useState({ ...EMPTY_FUND_FORM });
+  const [editFundForm, setEditFundForm] = useState({ ...EMPTY_FUND_FORM });
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('blue');
   const [fundError, setFundError] = useState('');
@@ -115,73 +301,111 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         })
       : 'N/A';
 
-  const calculateTotalToAdd = (types) =>
-    types
-      .filter((ct) => ct.checked)
-      .reduce((sum, ct) => sum + (Number(ct.amount) || 0), 0);
+  const updateFundField = (field, value) =>
+    setFundForm((prev) => ({ ...prev, [field]: value }));
 
-  const buildBreakdown = (types) =>
-    types
-      .filter((ct) => ct.checked && ct.amount)
-      .map(
-        (ct) =>
-          `${ct.label.split('(')[0].trim()}: ${ct.description || 'N/A'} - ${settings.currency}${ct.amount}`
-      )
-      .join(', ');
+  const updateEditFundField = (field, value) =>
+    setEditFundForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleCurrencyTypeToggle = (typeId) => {
-    setCurrencyTypes((prev) =>
-      prev.map((ct) => (ct.id === typeId ? { ...ct, checked: !ct.checked } : ct))
-    );
+  const calculateFundTotal = (form) => {
+    const note = Number(form.note) || 0;
+    const quantity = Number(form.quantity) || 0;
+    return note * quantity;
   };
 
-  const handleCurrencyFieldChange = (typeId, field, value) => {
-    setCurrencyTypes((prev) =>
-      prev.map((ct) => (ct.id === typeId ? { ...ct, [field]: value } : ct))
-    );
+  const buildBreakdown = (form) => {
+    const note = Number(form.note) || 0;
+    const quantity = Number(form.quantity) || 0;
+    const total = note * quantity;
+
+    if (note <= 0 || quantity <= 0) return '';
+
+    const description = sanitizeDescription(form.description) || 'N/A';
+    return `${settings.currency}${note} x ${quantity}: ${description} - ${settings.currency}${total}`;
   };
 
-  const handleAddCustomType = () => {
-    if (!newCurrencyType.trim()) {
-      toast('Please enter a currency type name', 'error');
-      return;
+  const parseFundBreakdown = (source) => {
+    if (!source.breakdown) {
+      return {
+        note: Number(source.amount) || null,
+        quantity: '1',
+        description: '',
+      };
     }
 
-    const customId = `custom_${Date.now()}`;
-    setCurrencyTypes((prev) => [
-      ...prev,
-      {
-        id: customId,
-        label: newCurrencyType.trim(),
-        checked: false,
-        step: 1,
-        description: '',
-        amount: '',
-        isCustom: true,
-      },
-    ]);
-    setNewCurrencyType('');
-    toast('Custom type added!', 'success');
-  };
+    const parsed = [];
 
-  const handleRemoveCustomType = (typeId) => {
-    setCurrencyTypes((prev) => prev.filter((ct) => ct.id !== typeId));
+    source.breakdown.split(', ').forEach((part) => {
+      const match = part.match(/(.+?):\s*(.+?)\s*-\s*[^\d]*([\d.]+)/);
+      if (!match) return;
+
+      const [, type, desc, amt] = match;
+      const typeKey = type.trim();
+      const amount = Number(amt) || 0;
+      const description = desc.trim() === 'N/A' ? '' : desc.trim();
+      const quantityMatch = typeKey.match(
+        /^(.*?)([\d.,]+)\s*[x\u00D7]\s*([\d.]+)\s*$/i
+      );
+
+      if (quantityMatch) {
+        const note = Number(quantityMatch[2].replace(/,/g, ''));
+        const quantity = quantityMatch[3];
+
+        if (
+          note > 0 &&
+          Number(quantity) > 0 &&
+          Math.abs(note * Number(quantity) - amount) < 0.01
+        ) {
+          parsed.push({ note, quantity, description });
+          return;
+        }
+      }
+
+      // Legacy entry (e.g. "Big Notes: desc - ₹5000"): keep the amount as the note.
+      parsed.push({ note: amount, quantity: '1', description });
+    });
+
+    if (parsed.length === 1) return parsed[0];
+
+    if (parsed.length > 1) {
+      // Legacy multi-type breakdown: collapse into one total so no money is lost.
+      return {
+        note:
+          Number(source.amount) ||
+          parsed.reduce(
+            (sum, row) =>
+              sum + (Number(row.note) || 0) * (Number(row.quantity) || 0),
+            0
+          ),
+        quantity: '1',
+        description: parsed
+          .map((row) => row.description)
+          .filter(Boolean)
+          .join('; '),
+      };
+    }
+
+    return {
+      note: Number(source.amount) || null,
+      quantity: '1',
+      description: '',
+    };
   };
 
   const handleAddFunds = () => {
     setFundError('');
-    const totalAmount = calculateTotalToAdd(currencyTypes);
+    const totalAmount = calculateFundTotal(fundForm);
 
     if (totalAmount <= 0) {
-      setFundError('Please enter at least one amount');
-      toast('Please enter at least one amount', 'error');
+      const message = 'Please select a note and enter a quantity';
+      setFundError(message);
+      toast(message, 'error');
       return;
     }
 
-    addSource(id, 'Funds Added', buildBreakdown(currencyTypes), totalAmount);
+    addSource(id, 'Funds Added', buildBreakdown(fundForm), totalAmount);
 
-    // Reset form
-    setCurrencyTypes(DEFAULT_CURRENCY_TYPES);
+    setFundForm({ ...EMPTY_FUND_FORM });
     setIsAddFundsModalOpen(false);
     toast('Funds added successfully!', 'success');
   };
@@ -189,64 +413,27 @@ export default function CapitalDetailsScreen({ route, navigation }) {
   const handleEditFund = (source) => {
     setSelectedFund(source);
     setFundError('');
-
-    const resetTypes = DEFAULT_CURRENCY_TYPES.map((type) => ({ ...type }));
-
-    if (source.breakdown) {
-      const parts = source.breakdown.split(', ');
-      parts.forEach((part) => {
-        const match = part.match(/(.+?):\s*(.+?)\s*-\s*[^\d]*([\d.]+)/);
-        if (!match) return;
-
-        const [, type, desc, amt] = match;
-        const typeKey = type.trim();
-
-        let foundType = null;
-        if (typeKey.toLowerCase().includes('big')) foundType = 'bigNotes';
-        else if (typeKey.toLowerCase().includes('small')) foundType = 'smallNotes';
-        else if (typeKey.toLowerCase().includes('coin')) foundType = 'coins';
-        else if (typeKey.toLowerCase().includes('other')) foundType = 'Others';
-
-        if (foundType) {
-          const typeIndex = resetTypes.findIndex((t) => t.id === foundType);
-          if (typeIndex !== -1) {
-            resetTypes[typeIndex] = {
-              ...resetTypes[typeIndex],
-              checked: true,
-              description: desc.trim() !== 'N/A' ? desc.trim() : '',
-              amount: amt.trim(),
-            };
-          }
-        } else {
-          // Custom type
-          resetTypes.push({
-            id: `custom_${Date.now()}_${Math.random()}`,
-            label: typeKey,
-            checked: true,
-            step: 1,
-            description: desc.trim() !== 'N/A' ? desc.trim() : '',
-            amount: amt.trim(),
-            isCustom: true,
-          });
-        }
-      });
-    }
-
-    setEditCurrencyTypes(resetTypes);
+    setEditFundForm(parseFundBreakdown(source));
     setIsEditFundModalOpen(true);
   };
 
   const handleUpdateFund = () => {
     setFundError('');
-    const totalAmount = calculateTotalToAdd(editCurrencyTypes);
+    const totalAmount = calculateFundTotal(editFundForm);
 
     if (totalAmount <= 0) {
-      setFundError('Please enter at least one amount');
-      toast('Please enter at least one amount', 'error');
+      const message = 'Please select a note and enter a quantity';
+      setFundError(message);
+      toast(message, 'error');
       return;
     }
 
-    updateSource(selectedFund.id, 'Funds Added', buildBreakdown(editCurrencyTypes), totalAmount);
+    updateSource(
+      selectedFund.id,
+      'Funds Added',
+      buildBreakdown(editFundForm),
+      totalAmount
+    );
 
     setIsEditFundModalOpen(false);
     setSelectedFund(null);
@@ -284,59 +471,74 @@ export default function CapitalDetailsScreen({ route, navigation }) {
     navigation.goBack();
   };
 
-  const renderCurrencyTypes = (types, onToggle, onChange, onRemoveCustom) => (
-    <View style={styles.formGroup}>
-      {types.map((ct) => (
-        <View key={ct.id} style={styles.typeBlock}>
-          <View style={styles.checkboxRow}>
-            <Switch
-              value={ct.checked}
-              onValueChange={() => onToggle(ct.id)}
-              trackColor={{ false: colors.border, true: colors.primary + '60' }}
-              thumbColor={ct.checked ? colors.primary : '#f4f3f4'}
-            />
-            <Text style={[styles.checkboxLabel, { color: colors.foreground }]}>
-              {ct.label}
-            </Text>
-            {ct.isCustom && onRemoveCustom && (
-              <TouchableOpacity
-                onPress={() => onRemoveCustom(ct.id)}
-                style={styles.removeTypeBtn}
-              >
-                <Ionicons name="close" size={16} color="#f43f5e" />
-              </TouchableOpacity>
-            )}
-          </View>
+  const renderFundForm = (form, updateField) => {
+    const note = Number(form.note) || 0;
+    const quantity = Number(form.quantity) || 0;
+    const total = note * quantity;
 
-          {ct.checked && (
-            <View style={styles.fieldsRow}>
-              <TextInput
-                style={[
-                  styles.fieldInput,
-                  { flex: 2, color: colors.foreground, backgroundColor: colors.input },
-                ]}
-                placeholder="Description"
-                placeholderTextColor={colors.placeholder}
-                value={ct.description}
-                onChangeText={(text) => onChange(ct.id, 'description', text)}
-              />
-              <TextInput
-                style={[
-                  styles.fieldInput,
-                  { flex: 1, color: colors.foreground, backgroundColor: colors.input },
-                ]}
-                placeholder="Amount"
-                placeholderTextColor={colors.placeholder}
-                value={ct.amount}
-                onChangeText={(text) => onChange(ct.id, 'amount', text)}
-                keyboardType="decimal-pad"
-              />
-            </View>
-          )}
+    return (
+      <View style={styles.fundForm}>
+        <Text style={[styles.fieldLabel, { color: colors.label }]}>
+          Note / Coin
+        </Text>
+        <NoteSelect
+          value={form.note}
+          onChange={(noteValue) => updateField('note', noteValue)}
+          currency={settings.currency}
+          colors={colors}
+        />
+
+        <Text
+          style={[styles.fieldLabel, { color: colors.label, marginTop: 16 }]}
+        >
+          Quantity
+        </Text>
+        <QuantityInput
+          value={form.quantity}
+          onChange={(quantityValue) => updateField('quantity', quantityValue)}
+          colors={colors}
+        />
+
+        <View
+          style={[
+            styles.totalBox,
+            { backgroundColor: colors.input, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.totalBoxLeft}>
+            <Text style={[styles.totalBoxLabel, { color: colors.muted }]}>
+              TOTAL
+            </Text>
+            <Text style={[styles.totalBoxEquation, { color: colors.muted }]}>
+              {note > 0 && quantity > 0
+                ? `${settings.currency}${note.toLocaleString()} \u00D7 ${quantity}`
+                : 'Select a note and quantity'}
+            </Text>
+          </View>
+          <Text style={[styles.totalBoxValue, { color: colors.heading }]}>
+            {settings.currency}
+            {total.toLocaleString()}
+          </Text>
         </View>
-      ))}
-    </View>
-  );
+
+        <Text
+          style={[styles.fieldLabel, { color: colors.label, marginTop: 16 }]}
+        >
+          Description
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            { color: colors.foreground, backgroundColor: colors.input },
+          ]}
+          placeholder="e.g., Rent money, groceries, pocket cash"
+          placeholderTextColor={colors.placeholder}
+          value={form.description}
+          onChangeText={(text) => updateField('description', text)}
+        />
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView
@@ -381,6 +583,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
           <TouchableOpacity
             onPress={() => {
               setFundError('');
+              setFundForm({ ...EMPTY_FUND_FORM });
               setIsAddFundsModalOpen(true);
             }}
             style={[styles.addFundsBtn, { backgroundColor: buttonColor }]}
@@ -488,7 +691,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
                                       { color: colors.foreground },
                                     ]}
                                   >
-                                    {item.type}:
+                                    {item.type.replace(/\s*x\s*(\d+)\s*$/i, ' \u00D7 $1')}:
                                   </Text>
                                   <Text
                                     style={[
@@ -561,40 +764,10 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         title="Add Funds to Wallet"
       >
         <Text style={[styles.modalDesc, { color: colors.muted }]}>
-          Select currency types and enter details.
+          Pick a note, enter how many you have, then describe this amount.
         </Text>
 
-        {renderCurrencyTypes(
-          currencyTypes,
-          handleCurrencyTypeToggle,
-          handleCurrencyFieldChange,
-          handleRemoveCustomType
-        )}
-
-        {/* Add Custom Type */}
-        <View style={[styles.customTypeSection, { borderTopColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.label }]}>
-            Add Custom Currency Type
-          </Text>
-          <View style={styles.customTypeRow}>
-            <TextInput
-              style={[
-                styles.customInput,
-                { color: colors.foreground, backgroundColor: colors.input },
-              ]}
-              placeholder="e.g., Gift Cards, Mobile Money"
-              placeholderTextColor={colors.placeholder}
-              value={newCurrencyType}
-              onChangeText={setNewCurrencyType}
-            />
-            <TouchableOpacity
-              onPress={handleAddCustomType}
-              style={[styles.customBtn, { backgroundColor: colors.primary }]}
-            >
-              <Ionicons name="add" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {renderFundForm(fundForm, updateFundField)}
 
         {/* Balance Summary */}
         <View style={[styles.summary, { borderTopColor: colors.border }]}>
@@ -611,7 +784,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
             <Text style={[styles.summaryLabelGreen]}>Amount to Add:</Text>
             <Text style={[styles.summaryValueGreen]}>
               {settings.currency}
-              {calculateTotalToAdd(currencyTypes).toLocaleString()}
+              {calculateFundTotal(fundForm).toLocaleString()}
             </Text>
           </View>
           <View style={[styles.divider, { borderTopColor: colors.border }]} />
@@ -621,7 +794,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
             </Text>
             <Text style={[styles.summaryValueBold, { color: colors.heading }]}>
               {settings.currency}
-              {(balance + calculateTotalToAdd(currencyTypes)).toLocaleString()}
+              {(balance + calculateFundTotal(fundForm)).toLocaleString()}
             </Text>
           </View>
         </View>
@@ -688,22 +861,10 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         title="Edit Fund"
       >
         <Text style={[styles.modalDesc, { color: colors.muted }]}>
-          Update currency types and amounts.
+          Update the note, quantity or description.
         </Text>
 
-        {renderCurrencyTypes(
-          editCurrencyTypes,
-          (typeId) =>
-            setEditCurrencyTypes((prev) =>
-              prev.map((ct) =>
-                ct.id === typeId ? { ...ct, checked: !ct.checked } : ct
-              )
-            ),
-          (typeId, field, value) =>
-            setEditCurrencyTypes((prev) =>
-              prev.map((ct) => (ct.id === typeId ? { ...ct, [field]: value } : ct))
-            )
-        )}
+        {renderFundForm(editFundForm, updateEditFundField)}
 
         <View style={[styles.summary, { borderTopColor: colors.border }]}>
           <View style={styles.summaryRow}>
@@ -719,7 +880,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
             <Text style={[styles.summaryLabelBlue]}>New Amount:</Text>
             <Text style={[styles.summaryValueBlue]}>
               {settings.currency}
-              {calculateTotalToAdd(editCurrencyTypes).toLocaleString()}
+              {calculateFundTotal(editFundForm).toLocaleString()}
             </Text>
           </View>
         </View>
@@ -830,16 +991,85 @@ const styles = StyleSheet.create({
   formGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
   input: { padding: 16, borderRadius: 16, fontSize: 16 },
-  typeBlock: { marginBottom: 8 },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  checkboxLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
-  removeTypeBtn: { padding: 4 },
-  fieldsRow: { flexDirection: 'row', gap: 12, marginLeft: 56, marginBottom: 12 },
-  fieldInput: { padding: 12, borderRadius: 12, fontSize: 14 },
-  customTypeSection: { borderTopWidth: 1, paddingTop: 16, marginBottom: 8 },
-  customTypeRow: { flexDirection: 'row', gap: 8 },
-  customInput: { flex: 1, padding: 12, borderRadius: 12, fontSize: 14 },
-  customBtn: { paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  fundForm: { marginBottom: 8 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  select: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  selectText: { fontSize: 16, fontWeight: '600' },
+  optionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  optionChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  optionChipText: { fontSize: 13, fontWeight: '600' },
+  quantityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  quantityInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  quantityDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  quantityDropdownText: { fontSize: 13, fontWeight: '600' },
+  quantityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  quantityChip: {
+    width: 44,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityChipText: { fontSize: 14, fontWeight: '600' },
+  totalBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 16,
+    gap: 12,
+  },
+  totalBoxLeft: { flex: 1 },
+  totalBoxLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  totalBoxEquation: { fontSize: 12, marginTop: 2 },
+  totalBoxValue: { fontSize: 22, fontWeight: '700' },
   summary: { borderTopWidth: 1, paddingTop: 16, marginTop: 8, marginBottom: 16 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   summaryLabel: { fontSize: 14 },

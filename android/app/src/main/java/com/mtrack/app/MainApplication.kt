@@ -1,4 +1,4 @@
-package com.extrack.app
+package com.mtrack.app
 
 import android.app.Application
 import android.content.res.Configuration

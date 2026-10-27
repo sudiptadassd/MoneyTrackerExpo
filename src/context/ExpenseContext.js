@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { applyBackup } from '../utils/backupImport';
 
 const ExpenseContext = createContext();
 
@@ -283,6 +284,26 @@ export const ExpenseProvider = ({ children }) => {
     setTransactions(dummyData.transactions || []);
   };
 
+  const importData = (payload, options = {}) => {
+    const { next, summary } = applyBackup(
+      { capitals, fund, sources, expenses, transactions, settings },
+      payload,
+      options
+    );
+
+    setCapitals(next.capitals);
+    setFund(next.fund);
+    setSources(next.sources);
+    setExpenses(next.expenses);
+    setTransactions(next.transactions);
+
+    if (summary.settingsApplied) {
+      setSettings(next.settings);
+    }
+
+    return summary;
+  };
+
   const toggleDarkMode = () => {
     setSettings((prev) => ({ ...prev, darkMode: !prev.darkMode }));
   };
@@ -308,6 +329,7 @@ export const ExpenseProvider = ({ children }) => {
     getTotalBalance,
     resetApp,
     loadDummyData,
+    importData,
     toggleDarkMode,
   };
 

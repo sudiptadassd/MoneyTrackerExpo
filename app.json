@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ExTrack",
-    "slug": "extrack",
+    "name": "MTrack",
+    "slug": "mtrack",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,7 +11,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.extrack.app",
+      "bundleIdentifier": "com.mtrack.app",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch"
@@ -22,7 +22,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#09090b"
       },
-      "package": "com.extrack.app",
+      "package": "com.mtrack.app",
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -36,10 +36,7 @@
       "expo-file-system"
     ],
     "extra": {
-      "eas": {
-        "projectId": "9b22ebbd-4a53-494c-8823-4bd1ccc97f35"
-      }
-    },
-    "owner": "c2_bebit69965"
+
+    }
   }
 }

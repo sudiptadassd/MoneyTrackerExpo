@@ -22,7 +22,6 @@ export default function DashboardScreen({ navigation }) {
   const {
     capitals,
     settings,
-    getTotalBalance,
     getCapitalBalance,
     addExpense,
     expenses,
@@ -39,8 +38,6 @@ export default function DashboardScreen({ navigation }) {
   const [expenseBreakdown, setExpenseBreakdown] = useState('');
   const [formError, setFormError] = useState('');
 
-  const totalBalance = getTotalBalance();
-
   // Local date (matches the web app's en-CA "YYYY-MM-DD" output)
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -50,9 +47,47 @@ export default function DashboardScreen({ navigation }) {
 
   const monthStart = new Date();
   monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
   const monthlyExpenses = expenses
     .filter((e) => new Date(e.date) >= monthStart)
-    .reduce((sum, e) => sum + e.amount, 0);
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  const last7Days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+
+    const key = date.toLocaleDateString('en-CA');
+    const total = expenses
+      .filter((expense) => expense.date.startsWith(key))
+      .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+
+    return {
+      key,
+      total,
+      isToday: index === 6,
+      label: date.toLocaleDateString('en-US', { weekday: 'narrow' }),
+    };
+  });
+
+  const maxDailySpend = Math.max(...last7Days.map((day) => day.total), 1);
+  const chartDays = last7Days.map((day) => ({
+    ...day,
+    barHeight:
+      day.total > 0
+        ? Math.max(8, Math.round((day.total / maxDailySpend) * 52))
+        : 5,
+  }));
+
+  const todayShare =
+    monthlyExpenses > 0
+      ? Math.min(100, Math.round((todayExpenses / monthlyExpenses) * 100))
+      : 0;
+
+  const monthLabel = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+  });
 
   const recentTransactions = transactions.slice(0, 9);
 
@@ -134,43 +169,127 @@ export default function DashboardScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.appName, { color: colors.heading }]}>ExTrack</Text>
-            <Text style={[styles.welcome, { color: colors.muted }]}>Welcome back!</Text>
+            <Text style={[styles.appName, { color: colors.heading }]}>MTrack</Text>
           </View>
           <ThemeToggle />
         </View>
 
-        {/* Total Balance Card */}
-        <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
-          <View style={styles.balanceIcon}>
-            <Ionicons name="wallet" size={120} color="rgba(255,255,255,0.15)" />
+        {/* Spending Overview Card */}
+        <View style={[styles.spendingCard, { backgroundColor: colors.primary }]}>
+          <View style={styles.spendingOrbLarge} />
+          <View style={styles.spendingOrbSmall} />
+
+          <View style={styles.spendingHeader}>
+            <View>
+              <Text style={styles.spendingEyebrow}>SPENDING OVERVIEW</Text>
+              <Text style={styles.spendingTitle}>Last 7 days</Text>
+            </View>
+            <View style={styles.spendingBadge}>
+              <Ionicons name="calendar-clear-outline" size={13} color="#fff" />
+              <Text style={styles.spendingBadgeText}>{monthLabel}</Text>
+            </View>
           </View>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>
-            <Text style={styles.balanceCurrency}>{settings.currency}</Text>
-            {totalBalance.toLocaleString()}
-          </Text>
-          <View style={styles.balanceStats}>
-            <View style={styles.statBox}>
-              <View style={styles.statIconRow}>
-                <Ionicons name="trending-down" size={14} color="#fbbf24" />
-                <Text style={styles.statLabel}>Today's Spent</Text>
+
+          <View style={styles.spendingStats}>
+            <View style={styles.spendingStatTile}>
+              <View style={styles.spendingStatTop}>
+                <View
+                  style={[
+                    styles.spendingStatIcon,
+                    { backgroundColor: 'rgba(251,191,36,0.18)' },
+                  ]}
+                >
+                  <Ionicons name="trending-down" size={15} color="#fbbf24" />
+                </View>
+                <Text style={styles.spendingStatLabel}>Today's Spent</Text>
               </View>
-              <Text style={styles.statValue}>
-                {settings.currency}
+              <Text
+                style={styles.spendingStatValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                <Text style={styles.spendingStatCurrency}>
+                  {settings.currency}
+                </Text>
                 {todayExpenses.toLocaleString()}
               </Text>
             </View>
-            <View style={styles.statBox}>
-              <View style={styles.statIconRow}>
-                <Ionicons name="trending-down" size={14} color="#fbbf24" />
-                <Text style={styles.statLabel}>This Month</Text>
+
+            <View style={styles.spendingStatTile}>
+              <View style={styles.spendingStatTop}>
+                <View
+                  style={[
+                    styles.spendingStatIcon,
+                    { backgroundColor: 'rgba(191,219,254,0.18)' },
+                  ]}
+                >
+                  <Ionicons name="calendar-outline" size={15} color="#bfdbfe" />
+                </View>
+                <Text style={styles.spendingStatLabel}>This Month</Text>
               </View>
-              <Text style={styles.statValue}>
-                {settings.currency}
+              <Text
+                style={styles.spendingStatValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                <Text style={styles.spendingStatCurrency}>
+                  {settings.currency}
+                </Text>
                 {monthlyExpenses.toLocaleString()}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.spendingChart}>
+            <View style={styles.spendingChartHeader}>
+              <Text style={styles.spendingChartLabel}>DAILY SPEND</Text>
+              <View style={styles.spendingLegend}>
+                <View style={styles.spendingLegendDot} />
+                <Text style={styles.spendingLegendText}>Today</Text>
+              </View>
+            </View>
+
+            <View style={styles.spendingBars}>
+              {chartDays.map((day) => (
+                <View key={day.key} style={styles.spendingBarColumn}>
+                  <View style={styles.spendingBarTrack}>
+                    <View
+                      style={[
+                        styles.spendingBar,
+                        {
+                          height: day.barHeight,
+                          backgroundColor: day.isToday
+                            ? '#fbbf24'
+                            : 'rgba(255,255,255,0.42)',
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.spendingBarLabel,
+                      day.isToday && styles.spendingBarLabelToday,
+                    ]}
+                  >
+                    {day.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.spendingProgressRow}>
+            <Text style={styles.spendingProgressText}>
+              Today's share of this month
+            </Text>
+            <Text style={styles.spendingProgressValue}>{todayShare}%</Text>
+          </View>
+          <View style={styles.spendingProgressTrack}>
+            <View
+              style={[styles.spendingProgressFill, { width: `${todayShare}%` }]}
+            />
           </View>
         </View>
 
@@ -465,32 +584,197 @@ const styles = StyleSheet.create({
   },
   appName: { fontSize: 36, fontWeight: '700' },
   welcome: { fontSize: 16, marginTop: 2 },
-  balanceCard: {
-    borderRadius: 24,
-    padding: 24,
+  spendingCard: {
+    borderRadius: 28,
+    padding: 20,
     position: 'relative',
     overflow: 'hidden',
     marginBottom: 24,
   },
-  balanceIcon: { position: 'absolute', top: 0, right: 0, padding: 16, opacity: 0.3 },
-  balanceLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
+  spendingOrbLarge: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    top: -80,
+    right: -60,
   },
-  balanceAmount: { fontSize: 36, fontWeight: '700', color: '#fff', marginBottom: 24 },
-  balanceCurrency: { fontSize: 22, opacity: 0.8 },
-  balanceStats: { flexDirection: 'row', gap: 16 },
-  statBox: {
+  spendingOrbSmall: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: -50,
+    left: -35,
+  },
+  spendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+  spendingEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: 'rgba(255,255,255,0.62)',
+  },
+  spendingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 4,
+    letterSpacing: -0.3,
+  },
+  spendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  spendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  spendingStats: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  spendingStatTile: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
     padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  statIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)' },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  spendingStatTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 8,
+  },
+  spendingStatIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spendingStatLabel: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.72)',
+  },
+  spendingStatValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.3,
+  },
+  spendingStatCurrency: {
+    fontSize: 11,
+    fontWeight: '600',
+    opacity: 0.65,
+  },
+  spendingChart: {
+    marginBottom: 14,
+  },
+  spendingChartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  spendingChartLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.9,
+    color: 'rgba(255,255,255,0.55)',
+  },
+  spendingLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  spendingLegendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fbbf24',
+  },
+  spendingLegendText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.55)',
+  },
+  spendingBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    height: 76,
+  },
+  spendingBarColumn: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  spendingBarTrack: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  spendingBar: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  spendingBarLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+  },
+  spendingBarLabelToday: {
+    color: '#fff',
+  },
+  spendingProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  spendingProgressText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  spendingProgressValue: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  spendingProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  spendingProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#fbbf24',
+  },
   section: { marginBottom: 24 },
   sectionHeader: {
     flexDirection: 'row',

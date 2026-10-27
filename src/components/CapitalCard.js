@@ -41,7 +41,11 @@ const CapitalCard = ({ capital, variant = 'detailed', onPress, onEdit, onDelete 
           const match = part.match(/(.+?):\s*(.+?)\s*-\s*[^\d]*([\d.]+)/);
           if (match) {
             const [, type, , amt] = match;
-            const typeKey = type.trim();
+            // Group "₹500 x 5" and "₹500 x 2" together as "₹500"
+            const typeKey = type
+              .trim()
+              .replace(/\s*[x\u00D7]\s*[\d.]+\s*$/i, '')
+              .trim();
             const existing = allFunds.find(f => f.type === typeKey);
             if (existing) existing.total += Number(amt);
             else allFunds.push({ type: typeKey, total: Number(amt) });

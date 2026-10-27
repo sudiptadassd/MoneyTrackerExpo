@@ -13,6 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from './ThemeWrapper';
 
+/**
+ * Full-screen modal used by every form in the app
+ * (Add Expense, Add/Edit Capital, Add/Edit Fund, Currency picker).
+ *
+ * It covers the whole screen: an app-bar style header with the title and a
+ * close button, then a scrollable body that fills the remaining space.
+ */
 const Modal = ({ isOpen, onClose, title, children }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -22,65 +29,64 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   return (
     <RNModal
       visible={isOpen}
-      transparent
       animationType="slide"
+      presentationStyle="fullScreen"
       statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
-      >
-        <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+      <View style={[styles.container, { backgroundColor: colors.card }]}>
         <View
           style={[
-            styles.container,
+            styles.header,
             {
               backgroundColor: colors.card,
-              paddingBottom: Math.max(insets.bottom, 16),
+              borderBottomColor: colors.border,
+              paddingTop: insets.top + 8,
             },
           ]}
         >
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.heading }]}>{title}</Text>
-            <TouchableOpacity
-              onPress={onClose}
-              style={[styles.closeBtn, { backgroundColor: colors.input }]}
-            >
-              <Ionicons name="close" size={20} color={colors.muted} />
-            </TouchableOpacity>
-          </View>
+          <Text
+            style={[styles.title, { color: colors.heading }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={[styles.closeBtn, { backgroundColor: colors.input }]}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={20} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <KeyboardAvoidingView
+          style={[styles.body, { backgroundColor: colors.background }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
             {children}
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </RNModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
   container: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '88%',
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -91,23 +97,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
+    flex: 1,
+    marginRight: 12,
+    fontSize: 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  body: {
+    flex: 1,
+  },
   scroll: {
-    flexGrow: 0,
-    flexShrink: 1,
+    flex: 1,
   },
   content: {
     padding: 20,
-    paddingBottom: 8,
   },
 });
 
