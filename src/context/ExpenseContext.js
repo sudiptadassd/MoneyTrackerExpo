@@ -81,16 +81,23 @@ export const ExpenseProvider = ({ children }) => {
   const getCapitalBalance = (capitalId) => {
     const capitalSources = sources.filter((s) => s.capitalId === capitalId);
     const capitalExpenses = expenses.filter((e) => e.capitalId === capitalId);
+    const capital = capitals.find((c) => c.id === capitalId);
+    const adjustment = Number(capital?.balanceAdjustment) || 0;
 
     const totalCredit = capitalSources.reduce((sum, s) => sum + Number(s.amount), 0);
     const totalDebit = capitalExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-    return totalCredit - totalDebit;
+    return totalCredit - totalDebit + adjustment;
   };
 
   const getInitialBalance = (capitalId) => {
     const capitalSources = sources.filter((s) => s.capitalId === capitalId);
-    return capitalSources.reduce((sum, s) => sum + Number(s.amount), 0);
+    const capital = capitals.find((c) => c.id === capitalId);
+    const adjustment = Number(capital?.balanceAdjustment) || 0;
+
+    return (
+      capitalSources.reduce((sum, s) => sum + Number(s.amount), 0) + adjustment
+    );
   };
 
   const getTotalBalance = () => {
@@ -253,14 +260,40 @@ export const ExpenseProvider = ({ children }) => {
     );
   };
 
-  const deleteSource = (id) => {
+  const deleteSource = (id, options = {}) => {
+    const source = sources.find((s) => s.id === id);
+    if (!source) return;
+
     setSources((prev) => prev.filter((s) => s.id !== id));
+
+    // Keep the current balance unchanged by offsetting the removed amount.
+    if (options.keepBalance) {
+      setCapitals((prev) =>
+        prev.map((capital) =>
+          capital.id === source.capitalId
+            ? {
+                ...capital,
+                balanceAdjustment:
+                  Number(capital.balanceAdjustment || 0) +
+                  Number(source.amount || 0),
+              }
+            : capital
+        )
+      );
+    }
 
     // Keep the ledger record but tag it as removed
     setTransactions((prev) =>
       prev.map((t) => {
         if (t.referenceId === id) {
-          return { ...t, deletedTag: 'Fund Removed', fundDeleted: true };
+          return {
+            ...t,
+            deletedTag: options.keepBalance
+              ? 'Fund Removed (Balance Kept)'
+              : 'Fund Removed',
+            fundDeleted: true,
+            balanceKept: Boolean(options.keepBalance),
+          };
         }
         return t;
       })

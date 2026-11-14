@@ -7,11 +7,23 @@ const asText = (value) => (typeof value === 'string' ? value.trim() : '');
 
 const nameKey = (value) => asText(value).toLowerCase();
 
-const normalizeCapital = (capital) => ({
-  ...capital,
-  name: asText(capital.name),
-  color: asText(capital.color) || 'blue',
-});
+const normalizeCapital = (capital) => {
+  const adjustment = Number(capital.balanceAdjustment);
+
+  const normalized = {
+    ...capital,
+    name: asText(capital.name),
+    color: asText(capital.color) || 'blue',
+  };
+
+  if (Number.isFinite(adjustment) && adjustment !== 0) {
+    normalized.balanceAdjustment = adjustment;
+  } else {
+    delete normalized.balanceAdjustment;
+  }
+
+  return normalized;
+};
 
 const makeId = () => `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
@@ -300,6 +312,7 @@ const replaceCapital = (current, payload) => {
             name: incomingName || capital.name,
             color: asText(incomingCapital.color) || capital.color,
             createdAt: incomingCapital.createdAt || capital.createdAt,
+            balanceAdjustment: Number(incomingCapital.balanceAdjustment) || 0,
           }
         : capital
     );
