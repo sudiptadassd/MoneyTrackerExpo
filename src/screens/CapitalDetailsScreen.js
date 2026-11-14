@@ -14,6 +14,7 @@ import { useFeedback } from '../context/FeedbackContext';
 import { useTheme } from '../components/ThemeWrapper';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
+import DeleteFundModal from '../components/DeleteFundModal';
 
 const THEMES = [
   { id: 'blue', color: '#3b82f6' },
@@ -56,7 +57,7 @@ const DENOMINATIONS = {
 
 const DEFAULT_DENOMINATIONS = [1, 2, 5, 10, 20, 50, 100];
 
-const EMPTY_FUND_FORM = { note: null, quantity: '', description: '' };
+const EMPTY_FUND_FORM = { note: null, quantity: '', total: '', description: '' };
 
 const getNoteOptions = (currency, currentNote) => {
   const options = [...(DENOMINATIONS[currency] || DEFAULT_DENOMINATIONS)];
@@ -75,6 +76,19 @@ const sanitizeDescription = (text) =>
     .trim()
     .replace(/,/g, ';')
     .replace(/\s+-\s+/g, ' \u2013 ');
+
+/* Allow digits plus a single decimal separator (up to 2 decimal places) */
+const sanitizeAmountInput = (text) => {
+  const cleaned = text.replace(/[^0-9.]/g, '');
+  const [whole, ...rest] = cleaned.split('.');
+  if (rest.length === 0) return whole;
+  return `${whole || '0'}.${rest.join('').slice(0, 2)}`;
+};
+
+const toAmountString = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? String(numeric) : '';
+};
 
 /* Inline dropdown for picking a note/coin denomination */
 const NoteSelect = ({ value, onChange, currency, colors }) => {
@@ -96,6 +110,7 @@ const NoteSelect = ({ value, onChange, currency, colors }) => {
         ]}
       >
         <Text
+          numberOfLines={1}
           style={[
             styles.selectText,
             { color: hasValue ? colors.foreground : colors.placeholder },
@@ -301,13 +316,47 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         })
       : 'N/A';
 
+  const applyFundField = (form, field, value) => {
+    if (field === 'total') {
+      return { ...form, total: value };
+    }
+
+    if (field === 'note') {
+      const note = Number(value) || 0;
+      const quantity = Number(form.quantity) || 0;
+      return {
+        ...form,
+        note: value,
+        total:
+          note > 0 && quantity > 0 ? String(note * quantity) : form.total,
+      };
+    }
+
+    if (field === 'quantity') {
+      const note = Number(form.note) || 0;
+      const quantity = Number(value) || 0;
+      return {
+        ...form,
+        quantity: value,
+        total:
+          note > 0 && quantity > 0 ? String(note * quantity) : form.total,
+      };
+    }
+
+    return { ...form, [field]: value };
+  };
+
   const updateFundField = (field, value) =>
-    setFundForm((prev) => ({ ...prev, [field]: value }));
+    setFundForm((prev) => applyFundField(prev, field, value));
 
   const updateEditFundField = (field, value) =>
-    setEditFundForm((prev) => ({ ...prev, [field]: value }));
+    setEditFundForm((prev) => applyFundField(prev, field, value));
 
   const calculateFundTotal = (form) => {
+    // A directly typed total always wins; otherwise fall back to note x quantity.
+    const directTotal = Number(form.total);
+    if (Number.isFinite(directTotal) && directTotal > 0) return directTotal;
+
     const note = Number(form.note) || 0;
     const quantity = Number(form.quantity) || 0;
     return note * quantity;
@@ -316,12 +365,22 @@ export default function CapitalDetailsScreen({ route, navigation }) {
   const buildBreakdown = (form) => {
     const note = Number(form.note) || 0;
     const quantity = Number(form.quantity) || 0;
-    const total = note * quantity;
+    const total = calculateFundTotal(form);
 
-    if (note <= 0 || quantity <= 0) return '';
+    if (total <= 0) return '';
 
     const description = sanitizeDescription(form.description) || 'N/A';
-    return `${settings.currency}${note} x ${quantity}: ${description} - ${settings.currency}${total}`;
+    const usesNoteCalculator =
+      note > 0 &&
+      quantity > 0 &&
+      Math.abs(note * quantity - total) < 0.01;
+
+    if (usesNoteCalculator) {
+      return `${settings.currency}${note} x ${quantity}: ${description} - ${settings.currency}${total}`;
+    }
+
+    // Direct total entry: store it as a single unit so it round-trips on edit.
+    return `${settings.currency}${total} x 1: ${description} - ${settings.currency}${total}`;
   };
 
   const parseFundBreakdown = (source) => {
@@ -329,6 +388,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
       return {
         note: Number(source.amount) || null,
         quantity: '1',
+        total: toAmountString(source.amount),
         description: '',
       };
     }
@@ -365,19 +425,29 @@ export default function CapitalDetailsScreen({ route, navigation }) {
       parsed.push({ note: amount, quantity: '1', description });
     });
 
-    if (parsed.length === 1) return parsed[0];
+    if (parsed.length === 1) {
+      const single = parsed[0];
+      return {
+        ...single,
+        total: toAmountString(
+          (Number(single.note) || 0) * (Number(single.quantity) || 0)
+        ),
+      };
+    }
 
     if (parsed.length > 1) {
       // Legacy multi-type breakdown: collapse into one total so no money is lost.
+      const calculatedTotal = parsed.reduce(
+        (sum, row) =>
+          sum + (Number(row.note) || 0) * (Number(row.quantity) || 0),
+        0
+      );
+      const total = Number(source.amount) || calculatedTotal;
+
       return {
-        note:
-          Number(source.amount) ||
-          parsed.reduce(
-            (sum, row) =>
-              sum + (Number(row.note) || 0) * (Number(row.quantity) || 0),
-            0
-          ),
+        note: total,
         quantity: '1',
+        total: toAmountString(total),
         description: parsed
           .map((row) => row.description)
           .filter(Boolean)
@@ -388,6 +458,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
     return {
       note: Number(source.amount) || null,
       quantity: '1',
+      total: toAmountString(source.amount),
       description: '',
     };
   };
@@ -397,7 +468,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
     const totalAmount = calculateFundTotal(fundForm);
 
     if (totalAmount <= 0) {
-      const message = 'Please select a note and enter a quantity';
+      const message = 'Please enter a total amount or select a note and quantity';
       setFundError(message);
       toast(message, 'error');
       return;
@@ -422,7 +493,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
     const totalAmount = calculateFundTotal(editFundForm);
 
     if (totalAmount <= 0) {
-      const message = 'Please select a note and enter a quantity';
+      const message = 'Please enter a total amount or select a note and quantity';
       setFundError(message);
       toast(message, 'error');
       return;
@@ -445,12 +516,17 @@ export default function CapitalDetailsScreen({ route, navigation }) {
     setIsDeleteFundModalOpen(true);
   };
 
-  const confirmDeleteFund = () => {
+  const confirmDeleteFund = (keepBalance = false) => {
     if (selectedFund) {
-      deleteSource(selectedFund.id);
+      deleteSource(selectedFund.id, { keepBalance });
       setIsDeleteFundModalOpen(false);
       setSelectedFund(null);
-      toast('Fund deleted', 'success');
+      toast(
+        keepBalance
+          ? 'Fund entry removed; balance unchanged'
+          : 'Fund deleted; balance updated',
+        'success'
+      );
     }
   };
 
@@ -474,19 +550,54 @@ export default function CapitalDetailsScreen({ route, navigation }) {
   const renderFundForm = (form, updateField) => {
     const note = Number(form.note) || 0;
     const quantity = Number(form.quantity) || 0;
-    const total = note * quantity;
+    const total = calculateFundTotal(form);
+    const usesNoteCalculator =
+      note > 0 &&
+      quantity > 0 &&
+      Math.abs(note * quantity - total) < 0.01;
 
     return (
       <View style={styles.fundForm}>
-        <Text style={[styles.fieldLabel, { color: colors.label }]}>
-          Note / Coin
-        </Text>
-        <NoteSelect
-          value={form.note}
-          onChange={(noteValue) => updateField('note', noteValue)}
-          currency={settings.currency}
-          colors={colors}
-        />
+        <View style={styles.noteTotalRow}>
+          <View style={styles.noteTotalCol}>
+            <Text style={[styles.fieldLabel, { color: colors.label }]}>
+              Note / Coin
+            </Text>
+            <NoteSelect
+              value={form.note}
+              onChange={(noteValue) => updateField('note', noteValue)}
+              currency={settings.currency}
+              colors={colors}
+            />
+          </View>
+
+          <View style={styles.noteTotalCol}>
+            <Text style={[styles.fieldLabel, { color: colors.label }]}>
+              Total Amount
+            </Text>
+            <View
+              style={[
+                styles.totalInputWrap,
+                { backgroundColor: colors.input, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.totalInputPrefix, { color: colors.muted }]}>
+                {settings.currency}
+              </Text>
+              <TextInput
+                style={[styles.totalInput, { color: colors.foreground }]}
+                placeholder="0"
+                placeholderTextColor={colors.placeholder}
+                value={form.total}
+                onChangeText={(text) =>
+                  updateField('total', sanitizeAmountInput(text))
+                }
+                keyboardType="decimal-pad"
+                maxLength={12}
+              />
+            </View>
+          </View>
+        </View>
 
         <Text
           style={[styles.fieldLabel, { color: colors.label, marginTop: 16 }]}
@@ -510,9 +621,11 @@ export default function CapitalDetailsScreen({ route, navigation }) {
               TOTAL
             </Text>
             <Text style={[styles.totalBoxEquation, { color: colors.muted }]}>
-              {note > 0 && quantity > 0
+              {usesNoteCalculator
                 ? `${settings.currency}${note.toLocaleString()} \u00D7 ${quantity}`
-                : 'Select a note and quantity'}
+                : total > 0
+                ? 'Direct total amount'
+                : 'Select a note or enter a total'}
             </Text>
           </View>
           <Text style={[styles.totalBoxValue, { color: colors.heading }]}>
@@ -595,6 +708,26 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         </View>
 
         {/* Funds Breakdown */}
+        {Number(capital.balanceAdjustment) > 0 && (
+          <View
+            style={[
+              styles.adjustmentNote,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color={colors.muted}
+            />
+            <Text style={[styles.adjustmentText, { color: colors.muted }]}>
+              Current balance includes {settings.currency}
+              {Number(capital.balanceAdjustment).toLocaleString()} kept from
+              removed entries.
+            </Text>
+          </View>
+        )}
+
         {capitalSources.length > 0 ? (
           <View
             style={[
@@ -764,7 +897,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         title="Add Funds to Wallet"
       >
         <Text style={[styles.modalDesc, { color: colors.muted }]}>
-          Pick a note, enter how many you have, then describe this amount.
+          Pick a note and quantity, or type the total amount directly.
         </Text>
 
         {renderFundForm(fundForm, updateFundField)}
@@ -861,7 +994,7 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         title="Edit Fund"
       >
         <Text style={[styles.modalDesc, { color: colors.muted }]}>
-          Update the note, quantity or description.
+          Update the note, quantity, total or description.
         </Text>
 
         {renderFundForm(editFundForm, updateEditFundField)}
@@ -906,12 +1039,15 @@ export default function CapitalDetailsScreen({ route, navigation }) {
       />
 
       {/* Delete Fund Confirmation */}
-      <ConfirmModal
+      <DeleteFundModal
         isOpen={isDeleteFundModalOpen}
-        title="Delete Fund?"
-        message={`Are you sure you want to delete this fund of ${settings.currency}${selectedFund?.amount?.toLocaleString()}? This action cannot be undone.`}
-        onConfirm={confirmDeleteFund}
-        onCancel={() => setIsDeleteFundModalOpen(false)}
+        amountLabel={`${settings.currency}${selectedFund?.amount?.toLocaleString() || ''}`}
+        onDeleteAndUpdate={() => confirmDeleteFund(false)}
+        onRemoveOnly={() => confirmDeleteFund(true)}
+        onCancel={() => {
+          setIsDeleteFundModalOpen(false);
+          setSelectedFund(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -947,6 +1083,16 @@ const styles = StyleSheet.create({
   },
   addFundsText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   fundsSection: { borderRadius: 24, borderWidth: 1, padding: 24, marginBottom: 24 },
+  adjustmentNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  adjustmentText: { flex: 1, fontSize: 12, lineHeight: 17 },
   fundsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, gap: 8 },
   fundsTitle: { fontSize: 18, fontWeight: '700', flexShrink: 1 },
   fundsDate: { fontSize: 12, marginTop: 2 },
@@ -993,6 +1139,19 @@ const styles = StyleSheet.create({
   input: { padding: 16, borderRadius: 16, fontSize: 16 },
   fundForm: { marginBottom: 8 },
   fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  noteTotalRow: { flexDirection: 'row', gap: 12 },
+  noteTotalCol: { flex: 1 },
+  totalInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  totalInputPrefix: { fontSize: 16, fontWeight: '600' },
+  totalInput: { flex: 1, fontSize: 16, fontWeight: '600', padding: 0 },
   select: {
     flexDirection: 'row',
     alignItems: 'center',
