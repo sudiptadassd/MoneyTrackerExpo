@@ -3,7 +3,17 @@ import { View, Text, TouchableOpacity, Modal as RNModal, StyleSheet } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from './ThemeWrapper';
 
-const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+const ConfirmModal = ({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmLabel = 'Confirm',
+  confirmColor = '#e11d48',
+  icon = 'help-circle',
+  iconColor = '#f59e0b',
+}) => {
   const { colors } = useTheme();
 
   if (!isOpen) return null;
@@ -14,7 +24,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onCancel} />
         <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={[styles.iconContainer, { backgroundColor: colors.input }]}>
-            <Ionicons name="help-circle" size={32} color="#f59e0b" />
+            <Ionicons name={icon} size={32} color={iconColor} />
           </View>
           <Text style={[styles.title, { color: colors.heading }]}>{title}</Text>
           <Text style={[styles.message, { color: colors.muted }]}>{message}</Text>
@@ -27,9 +37,13 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onConfirm}
-              style={[styles.btn, styles.confirmBtn]}
+              style={[
+                styles.btn,
+                styles.confirmBtn,
+                { backgroundColor: confirmColor, shadowColor: confirmColor },
+              ]}
             >
-              <Text style={styles.confirmText}>Confirm</Text>
+              <Text style={styles.confirmText}>{confirmLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -277,6 +277,8 @@ export default function CapitalDetailsScreen({ route, navigation }) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditFundModalOpen, setIsEditFundModalOpen] = useState(false);
   const [isDeleteFundModalOpen, setIsDeleteFundModalOpen] = useState(false);
+  const [isConfirmFundDeleteOpen, setIsConfirmFundDeleteOpen] = useState(false);
+  const [fundDeleteAction, setFundDeleteAction] = useState(null);
   const [selectedFund, setSelectedFund] = useState(null);
   const [fundForm, setFundForm] = useState({ ...EMPTY_FUND_FORM });
   const [editFundForm, setEditFundForm] = useState({ ...EMPTY_FUND_FORM });
@@ -513,21 +515,37 @@ export default function CapitalDetailsScreen({ route, navigation }) {
 
   const handleDeleteFund = (source) => {
     setSelectedFund(source);
+    setFundDeleteAction(null);
     setIsDeleteFundModalOpen(true);
   };
 
-  const confirmDeleteFund = (keepBalance = false) => {
-    if (selectedFund) {
-      deleteSource(selectedFund.id, { keepBalance });
-      setIsDeleteFundModalOpen(false);
-      setSelectedFund(null);
-      toast(
-        keepBalance
-          ? 'Fund entry removed; balance unchanged'
-          : 'Fund deleted; balance updated',
-        'success'
-      );
-    }
+  const requestFundDelete = (action) => {
+    setFundDeleteAction(action);
+    setIsDeleteFundModalOpen(false);
+    setIsConfirmFundDeleteOpen(true);
+  };
+
+  const cancelFundDelete = () => {
+    setIsConfirmFundDeleteOpen(false);
+    setFundDeleteAction(null);
+    setSelectedFund(null);
+  };
+
+  const confirmFundDelete = () => {
+    if (!selectedFund || !fundDeleteAction) return;
+
+    const keepBalance = fundDeleteAction === 'keep';
+    deleteSource(selectedFund.id, { keepBalance });
+
+    setIsConfirmFundDeleteOpen(false);
+    setFundDeleteAction(null);
+    setSelectedFund(null);
+    toast(
+      keepBalance
+        ? 'Fund entry removed; balance unchanged'
+        : 'Fund deleted; balance updated',
+      'success'
+    );
   };
 
   const toggleItemExpand = (itemId) => {
@@ -1038,16 +1056,41 @@ export default function CapitalDetailsScreen({ route, navigation }) {
         onCancel={() => setIsDeleteModalOpen(false)}
       />
 
-      {/* Delete Fund Confirmation */}
+      {/* Delete Fund Choice */}
       <DeleteFundModal
         isOpen={isDeleteFundModalOpen}
         amountLabel={`${settings.currency}${selectedFund?.amount?.toLocaleString() || ''}`}
-        onDeleteAndUpdate={() => confirmDeleteFund(false)}
-        onRemoveOnly={() => confirmDeleteFund(true)}
+        onDeleteAndUpdate={() => requestFundDelete('update')}
+        onRemoveOnly={() => requestFundDelete('keep')}
         onCancel={() => {
           setIsDeleteFundModalOpen(false);
           setSelectedFund(null);
         }}
+      />
+
+      {/* Delete Fund Double-Check */}
+      <ConfirmModal
+        isOpen={isConfirmFundDeleteOpen}
+        title={
+          fundDeleteAction === 'keep'
+            ? 'Remove Entry Only?'
+            : 'Delete & Update Balance?'
+        }
+        message={
+          fundDeleteAction === 'keep'
+            ? `Are you sure? This permanently removes the fund entry of ${settings.currency}${selectedFund?.amount?.toLocaleString() || ''} but keeps the current balance unchanged. This cannot be undone.`
+            : `Are you sure? This permanently removes the fund entry of ${settings.currency}${selectedFund?.amount?.toLocaleString() || ''} and subtracts it from the current balance. This cannot be undone.`
+        }
+        confirmLabel={
+          fundDeleteAction === 'keep' ? 'Yes Remove' : 'Delete & update'
+        }
+        confirmColor={fundDeleteAction === 'keep' ? '#f59e0b' : '#e11d48'}
+        icon={
+          fundDeleteAction === 'keep' ? 'remove-circle-outline' : 'trash-outline'
+        }
+        iconColor={fundDeleteAction === 'keep' ? '#f59e0b' : '#f43f5e'}
+        onConfirm={confirmFundDelete}
+        onCancel={cancelFundDelete}
       />
     </SafeAreaView>
   );
